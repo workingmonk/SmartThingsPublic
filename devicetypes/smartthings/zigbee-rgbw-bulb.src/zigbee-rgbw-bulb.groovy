@@ -28,10 +28,6 @@ metadata {
         capability "Switch"
         capability "Switch Level"
 
-        attribute "colorName", "string"
-        command "setGenericName"
-        command "setAdjustedColor"
-
         fingerprint profileId: "0104", inClusters: "0000,0003,0004,0005,0006,0008,0300,0B04,FC0F", outClusters: "0019", manufacturer: "OSRAM", model: "LIGHTIFY Flex RGBW", deviceJoinName: "OSRAM LIGHTIFY LED FLEXIBLE STRIP RGBW"
         fingerprint profileId: "0104", inClusters: "0000,0003,0004,0005,0006,0008,0300,0B04,FC0F", outClusters: "0019", manufacturer: "OSRAM", model: "Flex RGBW", deviceJoinName: "OSRAM LIGHTIFY LED FLEXIBLE STRIP RGBW"
     }
@@ -142,23 +138,14 @@ def setLevel(value) {
 def setColor(value){
     log.trace "setColor($value)"
 
+    /*
     if (value.hex) { sendEvent(name: "color", value: value, displayed:false)}
     sendEvent(name: "colorTemperature", value: "--", displayed:false)
+    sendEvent(name: "hue", value: value.hue, displayed:false)
+    sendEvent(name: "saturation", value: value.saturation, displayed:false)
+    */
 
-    //sendEvent(name: "hue", value: value.hue, displayed:false)
-    //sendEvent(name: "saturation", value: value.saturation, displayed:false)
-    def scaledHueValue = zigbee.convertToHexString(Math.round(value.hue * 0xfe / 100.0), 2)
-    def scaledSatValue = zigbee.convertToHexString(Math.round(value.saturation * 0xfe / 100.0), 2)
-
-    def cmd = []
-    if (device.latestValue("switch") == "off") {
-        cmd += zigbee.on()
-    }
-
-    cmd += zigbee.command(zigbee.COLOR_CONTROL_CLUSTER, HUE_COMMAND, ${scaledHueValue}, "00", "0500")       //payload-> hue value, direction (00-> shortest distance), transition time (1/10th second) (0500 in U16 reads 5)
-    cmd += zigbee.command(zigbee.COLOR_CONTROL_CLUSTER, SATURATION_COMMAND, ${scaledSatValue}, "0500")      //payload-> sat value, transition time
-
-    cmd
+    zigbee.on() + setHue(value.hue) + setSaturation(value.saturation)
 }
 
 def setHue(value) {
