@@ -30,6 +30,9 @@ metadata {
 
         fingerprint profileId: "0104", inClusters: "0000,0003,0004,0005,0006,0008,0300,0B04,FC0F", outClusters: "0019", manufacturer: "OSRAM", model: "LIGHTIFY Flex RGBW", deviceJoinName: "OSRAM LIGHTIFY LED FLEXIBLE STRIP RGBW"
         fingerprint profileId: "0104", inClusters: "0000,0003,0004,0005,0006,0008,0300,0B04,FC0F", outClusters: "0019", manufacturer: "OSRAM", model: "Flex RGBW", deviceJoinName: "OSRAM LIGHTIFY LED FLEXIBLE STRIP RGBW"
+        fingerprint profileId: "0104", inClusters: "0000,0003,0004,0005,0006,0008,0300,0B04,FC0F", outClusters: "0019", manufacturer: "OSRAM", model: "LIGHTIFY A19 RGBW", deviceJoinName: "OSRAM LIGHTIFY A19 RGBW"
+        fingerprint profileId: "0104", inClusters: "0000,0003,0004,0005,0006,0008,0300,0B04,FC0F", outClusters: "0019", manufacturer: "OSRAM", model: "LIGHTIFY BR RGBW", deviceJoinName: "OSRAM LIGHTIFY BR RGBW"
+        fingerprint profileId: "0104", inClusters: "0000,0003,0004,0005,0006,0008,0300,0B04,FC0F", outClusters: "0019", manufacturer: "OSRAM", model: "LIGHTIFY RT RGBW", deviceJoinName: "OSRAM LIGHTIFY RT RGBW"
     }
 
     // UI tile definitions
@@ -68,6 +71,8 @@ private getATTRIBUTE_HUE() { 0x0000 }
 private getATTRIBUTE_SATURATION() { 0x0001 }
 private getHUE_COMMAND() { 0x00 }
 private getSATURATION_COMMAND() { 0x03 }
+private getCOLOR_CONTROL_CLUSTER() { 0x0300 }
+private getATTRIBUTE_COLOR_TEMPERATURE() { 0x0007 }
 
 // Parse incoming device messages to generate events
 def parse(String description) {
@@ -82,7 +87,7 @@ def parse(String description) {
         def zigbeeMap = zigbee.parseDescriptionAsMap(description)
         log.trace "zigbeeMap : $zigbeeMap"
 
-        if (zigbeeMap?.clusterInt == zigbee.CLUSTER_COLOR_CONTROL) {
+        if (zigbeeMap?.clusterInt == COLOR_CONTROL_CLUSTER) {
             if(zigbeeMap.attrInt == ATTRIBUTE_HUE){  //Hue Attribute
                 def hueValue = Math.round(convertHexToInt(zigbeeMap.value) / 255 * 360)
                 log.debug "Hue value returned is $hueValue"
@@ -109,22 +114,12 @@ def off() {
 }
 
 def refresh() {
-    zigbee.readAttribute(zigbee.ONOFF_CLUSTER, 0x00) + zigbee.readAttribute(zigbee.LEVEL_CONTROL_CLUSTER, 0x00)
-        + zigbee.readAttribute(zigbee.COLOR_CONTROL_CLUSTER, 0x00) + zigbee.readAttribute(zigbee.COLOR_CONTROL_CLUSTER, zigbee.ATTRIBUTE_COLOR_TEMPERATURE)
-        + zigbee.readAttribute(zigbee.COLOR_CONTROL_CLUSTER, ATTRIBUTE_HUE) + zigbee.readAttribute(zigbee.COLOR_CONTROL_CLUSTER, ATTRIBUTE_SATURATION)
-        + zigbee.onOffConfig() + zigbee.levelConfig() + zigbee.colorTemperatureConfig()
-        + zigbee.configureReporting(COLOR_CONTROL_CLUSTER, ATTRIBUTE_HUE, 0x20, 1, 3600, 0x01)
-        + zigbee.configureReporting(COLOR_CONTROL_CLUSTER, ATTRIBUTE_SATURATION, 0x20, 1, 3600, 0x01)
+    zigbee.readAttribute(0x0006, 0x00) + zigbee.readAttribute(0x0008, 0x00) + zigbee.readAttribute(0x0300, 0x00) + zigbee.readAttribute(0x0300, ATTRIBUTE_COLOR_TEMPERATURE) + zigbee.readAttribute(0x0300, ATTRIBUTE_HUE) + zigbee.readAttribute(0x0300, ATTRIBUTE_SATURATION) + zigbee.onOffConfig() + zigbee.levelConfig() + zigbee.colorTemperatureConfig() + zigbee.configureReporting(COLOR_CONTROL_CLUSTER, ATTRIBUTE_HUE, 0x20, 1, 3600, 0x01) + zigbee.configureReporting(COLOR_CONTROL_CLUSTER, ATTRIBUTE_SATURATION, 0x20, 1, 3600, 0x01)
 }
 
 def configure() {
     log.debug "Configuring Reporting and Bindings."
-    zigbee.onOffConfig() + zigbee.levelConfig() + zigbee.colorTemperatureConfig()
-        + zigbee.configureReporting(COLOR_CONTROL_CLUSTER, ATTRIBUTE_HUE, 0x20, 1, 3600, 0x01)
-        + zigbee.configureReporting(COLOR_CONTROL_CLUSTER, ATTRIBUTE_SATURATION, 0x20, 1, 3600, 0x01)
-        + zigbee.readAttribute(zigbee.ONOFF_CLUSTER, 0x00) + zigbee.readAttribute(zigbee.LEVEL_CONTROL_CLUSTER, 0x00)
-        + zigbee.readAttribute(zigbee.COLOR_CONTROL_CLUSTER, 0x00) + zigbee.readAttribute(zigbee.COLOR_CONTROL_CLUSTER, zigbee.ATTRIBUTE_COLOR_TEMPERATURE)
-        + zigbee.readAttribute(zigbee.COLOR_CONTROL_CLUSTER, ATTRIBUTE_HUE) + zigbee.readAttribute(zigbee.COLOR_CONTROL_CLUSTER, ATTRIBUTE_SATURATION)
+    zigbee.onOffConfig() + zigbee.levelConfig() + zigbee.colorTemperatureConfig() + zigbee.configureReporting(COLOR_CONTROL_CLUSTER, ATTRIBUTE_HUE, 0x20, 1, 3600, 0x01) + zigbee.configureReporting(COLOR_CONTROL_CLUSTER, ATTRIBUTE_SATURATION, 0x20, 1, 3600, 0x01) + zigbee.readAttribute(0x0006, 0x00) + zigbee.readAttribute(0x0008, 0x00) + zigbee.readAttribute(COLOR_CONTROL_CLUSTER, 0x00) + zigbee.readAttribute(COLOR_CONTROL_CLUSTER, ATTRIBUTE_COLOR_TEMPERATURE) + zigbee.readAttribute(COLOR_CONTROL_CLUSTER, ATTRIBUTE_HUE) + zigbee.readAttribute(COLOR_CONTROL_CLUSTER, ATTRIBUTE_SATURATION)
 }
 
 def setColorTemperature(value) {
