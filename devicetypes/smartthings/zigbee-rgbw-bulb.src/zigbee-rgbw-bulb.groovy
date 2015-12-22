@@ -89,12 +89,12 @@ def parse(String description) {
 
         if (zigbeeMap?.clusterInt == COLOR_CONTROL_CLUSTER) {
             if(zigbeeMap.attrInt == ATTRIBUTE_HUE){  //Hue Attribute
-                def hueValue = Math.round(convertHexToInt(zigbeeMap.value) / 255 * 360)
+                def hueValue = Math.round(zigbee.convertHexToInt(zigbeeMap.value) / 255 * 360)
                 log.debug "Hue value returned is $hueValue"
                 sendEvent(name: "hue", value: hueValue, displayed:false)
             }
             else if(zigbeeMap.attrInt == ATTRIBUTE_SATURATION){ //Saturation Attribute
-                def saturationValue = Math.round(convertHexToInt(zigbeeMap.value) / 255 * 100)
+                def saturationValue = Math.round(zigbee.convertHexToInt(zigbeeMap.value) / 255 * 100)
                 log.debug "Saturation from refresh is $saturationValue"
                 sendEvent(name: "saturation", value: saturationValue, displayed:false)
             }
@@ -145,10 +145,10 @@ def setColor(value){
 
 def setHue(value) {
     def scaledHueValue = zigbee.convertToHexString(Math.round(value * 0xfe / 100.0), 2)
-    zigbee.command(COLOR_CONTROL_CLUSTER, HUE_COMMAND, ${scaledHueValue}, "00", "0500")       //payload-> hue value, direction (00-> shortest distance), transition time (1/10th second) (0500 in U16 reads 5)
+    zigbee.command(COLOR_CONTROL_CLUSTER, HUE_COMMAND, scaledHueValue, "00", "0500")       //payload-> hue value, direction (00-> shortest distance), transition time (1/10th second) (0500 in U16 reads 5)
 }
 
 def setSaturation(value) {
-    def scaledSatValue = zigbee.convertToHexString(Math.round(value.saturation * 0xfe / 100.0), 2)
-    zigbee.command(COLOR_CONTROL_CLUSTER, SATURATION_COMMAND, ${scaledSatValue}, "0500")      //payload-> sat value, transition time
+    def scaledSatValue = zigbee.convertToHexString(Math.round(value * 0xfe / 100.0), 2)
+    zigbee.command(COLOR_CONTROL_CLUSTER, SATURATION_COMMAND, scaledSatValue, "0500")      //payload-> sat value, transition time
 }
