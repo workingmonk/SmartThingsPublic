@@ -51,13 +51,13 @@ metadata {
                 attributeState "color", action:"color control.setColor"
             }
         }
-        controlTile("colorTempSliderControl", "device.colorTemperature", "slider", height: 1, width: 2, inactiveLabel: false, range:"(2700..6500)") {
+        controlTile("colorTempSliderControl", "device.colorTemperature", "slider", width: 4, height: 2, inactiveLabel: false, range:"(2700..6500)") {
             state "colorTemperature", action:"color temperature.setColorTemperature"
         }
-        valueTile("colorTemp", "device.colorTemperature", inactiveLabel: false, decoration: "flat") {
+        valueTile("colorTemp", "device.colorTemperature", inactiveLabel: false, decoration: "flat", width: 2, height: 2) {
             state "colorTemperature", label: '${currentValue} K'
         }
-        standardTile("refresh", "device.switch", inactiveLabel: false, decoration: "flat") {
+        standardTile("refresh", "device.switch", inactiveLabel: false, decoration: "flat", width: 2, height: 2) {
             state "default", label:"", action:"refresh.refresh", icon:"st.secondary.refresh"
         }
 
@@ -100,7 +100,7 @@ def parse(String description) {
             }
         }
         else {
-            log.warn "DID NOT PARSE MESSAGE for description : $description"
+            log.info "DID NOT PARSE MESSAGE for description : $description"
         }
     }
 }
@@ -145,10 +145,10 @@ def setColor(value){
 
 def setHue(value) {
     def scaledHueValue = zigbee.convertToHexString(Math.round(value * 0xfe / 100.0), 2)
-    zigbee.command(zigbee.COLOR_CONTROL_CLUSTER, HUE_COMMAND, ${scaledHueValue}, "00", "0500")       //payload-> hue value, direction (00-> shortest distance), transition time (1/10th second) (0500 in U16 reads 5)
+    zigbee.command(COLOR_CONTROL_CLUSTER, HUE_COMMAND, ${scaledHueValue}, "00", "0500")       //payload-> hue value, direction (00-> shortest distance), transition time (1/10th second) (0500 in U16 reads 5)
 }
 
 def setSaturation(value) {
     def scaledSatValue = zigbee.convertToHexString(Math.round(value.saturation * 0xfe / 100.0), 2)
-    zigbee.command(zigbee.COLOR_CONTROL_CLUSTER, SATURATION_COMMAND, ${scaledSatValue}, "0500")      //payload-> sat value, transition time
+    zigbee.command(COLOR_CONTROL_CLUSTER, SATURATION_COMMAND, ${scaledSatValue}, "0500")      //payload-> sat value, transition time
 }
