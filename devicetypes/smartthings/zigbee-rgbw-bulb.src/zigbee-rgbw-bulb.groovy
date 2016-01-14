@@ -140,7 +140,7 @@ def setColor(value){
     sendEvent(name: "saturation", value: value.saturation, displayed:false)
     */
 
-    zigbee.on() + setHue(value.hue) + setSaturation(value.saturation)
+    zigbee.on() + setHue(value.hue) + "delay 300" + setSaturation(value.saturation)
 }
 
 def setHue(value) {
