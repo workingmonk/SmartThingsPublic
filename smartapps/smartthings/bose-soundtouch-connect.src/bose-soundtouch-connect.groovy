@@ -70,53 +70,77 @@ def getNameSpace() {
 }
 
 /**
+ *
+ * @return harcoded communication port 8090
+ */
+private String getBosePort() { "8090" }
+
+/**
  * The deviceDiscovery page used by preferences. Will automatically
  * make calls to the underlying discovery mechanisms as well as update
  * whenever new devices are discovered AND verified.
  *
  * @return a dynamicPage() object
  */
-def deviceDiscovery()
-{
-    if(canInstallLabs())
-    {
-        def refreshInterval = 3 // Number of seconds between refresh
-        int deviceRefreshCount = !state.deviceRefreshCount ? 0 : state.deviceRefreshCount as int
-        state.deviceRefreshCount = deviceRefreshCount + refreshInterval
+def deviceDiscovery() {
+    def refreshInterval = 3 // Number of seconds between refresh
+    int deviceRefreshCount = !state.deviceRefreshCount ? 0 : state.deviceRefreshCount as int
+    state.deviceRefreshCount = deviceRefreshCount + refreshInterval
 
-        def devices = getSelectableDevice()
-        def numFound = devices.size() ?: 0
+    def devices = getSelectableDevice()
+    def numFound = devices.size() ?: 0
 
-        // Make sure we get location updates (contains LAN data such as SSDP results, etc)
-        subscribeNetworkEvents()
+    ssdpSubscribe()
 
-        //device discovery request every 15s
-        if((deviceRefreshCount % 15) == 0) {
-            discoverDevices()
-        }
+    //device discovery request every 15s
+    if((deviceRefreshCount % 15) == 0) {
+        discoverDevices()
+    }
 
-        // Verify request every 3 seconds except on discoveries
-        if(((deviceRefreshCount % 3) == 0) && ((deviceRefreshCount % 15) != 0)) {
-            verifyDevices()
-        }
+    // Verify request every 3 seconds except on discoveries
+    if(((deviceRefreshCount % 3) == 0) && ((deviceRefreshCount % 15) != 0)) {
+        verifyDevices()
+    }
 
-        log.trace "Discovered devices: ${devices}"
+    log.trace "Discovered devices: ${devices}"
 
-        return dynamicPage(name:"deviceDiscovery", title:"Discovery Started!", nextPage:"", refreshInterval:refreshInterval, install:true, uninstall: true) {
-            section("Please wait while we discover your ${getDeviceName()}. Discovery can take five minutes or more, so sit back and relax! Select your device below once discovered.") {
-                input "selecteddevice", "enum", required:false, title:"Select ${getDeviceName()} (${numFound} found)", multiple:true, options:devices
-            }
+    return dynamicPage(name:"deviceDiscovery", title:"Discovery Started!", nextPage:"", refreshInterval:refreshInterval, install:true, uninstall: true) {
+        section("Please wait while we discover your ${getDeviceName()}. Discovery can take five minutes or more, so sit back and relax! Select your device below once discovered.") {
+            input "selecteddevice", "enum", required:false, title:"Select ${getDeviceName()} (${numFound} found)", multiple:true, options:devices
         }
     }
-    else
-    {
-        def upgradeNeeded = """To use SmartThings Labs, your Hub should be completely up to date.
+}
 
-To update your Hub, access Location Settings in the Main Menu (tap the gear next to your location name), select your Hub, and choose "Update Hub"."""
+void ssdpSubscribe() {
+    subscribe(location, "ssdpTerm.${deviceType}", ssdpHandler)
+}
 
-        return dynamicPage(name:"deviceDiscovery", title:"Upgrade needed!", nextPage:"", install:true, uninstall: true) {
-            section("Upgrade") {
-                paragraph "$upgradeNeeded"
+def ssdpHandler(evt) {
+    def description = evt.description
+    def hub = evt?.hubId
+    def parsedEvent = parseLanMessage(description)
+    parsedEvent << ["hub":hub]
+    //log.debug parsedEvent
+
+    if ((parsedEvent?.ssdpTerm?.contains(getDeviceType())) && (parsedEvent?.ssdpUSN?.contains(getUSNQualifier()))) {
+        def USN = parsedEvent.ssdpUSN.toString()
+        def devices = getDevices()
+        if (!(devices."${USN}")) {
+            //device does not exist
+            log.trace "parseSDDP() Adding Device \"${USN}\" to known list"
+            devices << ["${USN}":parsedEvent]
+        } else {
+            // update the values
+            def d = devices."${USN}"
+
+            if (d.networkAddress != parsedEvent.networkAddress || d.deviceAddress != parsedEvent.deviceAddress) {
+                log.trace "parseSSDP() Updating device location (ip & port)"
+                d.networkAddress = parsedEvent.networkAddress
+                d.deviceAddress = parsedEvent.deviceAddress
+                child = getChildDevice(parsedEvent.mac)
+                if (child) {
+                    child.sync(parsedEvent.networkAddress, bosePort)
+                }
             }
         }
     }
@@ -159,11 +183,13 @@ def uninstalled() {
  */
 def initialize() {
     log.trace "initialize()"
-    state.subscribe = false
+    unsubscribe()
+    unschedule()
+
     if (selecteddevice) {
+        ssdpSubscribe()
         addDevice()
         refreshDevices()
-        subscribeNetworkEvents(true)
     }
 }
 
@@ -193,7 +219,14 @@ def addDevice(){
             def deviceName = newDevice?.value.name
             if (!deviceName)
                 deviceName = getDeviceName() + "[${newDevice?.value.name}]"
-            d = addChildDevice(getNameSpace(), getDeviceName(), dni, newDevice?.value.hub, [label:"${deviceName}"])
+            d = addChildDevice(getNameSpace(), getDeviceName(), dni, newDevice?.value.hub, [
+                    "label": deviceName,
+                    "data": [
+                            "mac": newDevice.value.mac,
+                            "ip": newDevice.value.networkAddress,
+                            "port": bosePort
+                    ]
+            ])
             d.boseSetDeviceID(newDevice.value.deviceID)
             log.trace "Created ${d.displayName} with id $dni"
         } else {
@@ -208,9 +241,15 @@ def addDevice(){
  * @param dni Device Network id
  * @return address or null
  */
+//@Deprecated
 def resolveDNI2Address(dni) {
     def device = getVerifiedDevices().find { (it.value.mac) == dni }
     if (device) {
+        //first setup the sync so that this method isn't called again
+        def child = getChildDevice(dni)
+        if (child) {
+            child.sync(device.value.networkAddress, bosePort)      //bose connect gets port as 8091, but uses 8090 for communication
+        }
         return convertHexToIP(device.value.networkAddress)
     }
     return null
@@ -236,7 +275,7 @@ def boseZoneJoin(child) {
         child.boseSetZone("client")
 
         result['endpoint'] = "/setZone"
-        result['host'] = server.getDeviceIP() + ":8090"
+        result['host'] = server.getDeviceIP() + ":" + bosePort
         result['body'] = "<zone master=\"${server.boseGetDeviceID()}\" senderIPAddress=\"${server.getDeviceIP()}\">"
         getChildDevices().each{ it ->
             log.trace "child: " + child
@@ -248,7 +287,7 @@ def boseZoneJoin(child) {
     } else {
         log.debug "boseJoinZone() No server, add it!"
         result['endpoint'] = "/setZone"
-        result['host'] = child.getDeviceIP() + ":8090"
+        result['host'] = child.getDeviceIP() + ":" + bosePort
         result['body'] = "<zone master=\"${child.boseGetDeviceID()}\" senderIPAddress=\"${child.getDeviceIP()}\">"
         result['body'] = result['body'] + "<member ipaddress=\"${child.getDeviceIP()}\">${child.boseGetDeviceID()}</member>"
         result['body'] = result['body'] + '</zone>'
@@ -287,7 +326,7 @@ def boseZoneLeave(child) {
     if (server && server.boseGetDeviceID() != child.boseGetDeviceID()) {
         log.debug "boseLeaveZone() We have a server, so tell him we're leaving"
         result['endpoint'] = "/removeZoneSlave"
-        result['host'] = server.getDeviceIP() + ":8090"
+        result['host'] = server.getDeviceIP() + ":" + bosePort
         result['body'] = "<zone master=\"${server.boseGetDeviceID()}\" senderIPAddress=\"${server.getDeviceIP()}\">"
         result['body'] = result['body'] + "<member ipaddress=\"${child.getDeviceIP()}\">${child.boseGetDeviceID()}</member>"
         result['body'] = result['body'] + '</zone>'
@@ -296,7 +335,7 @@ def boseZoneLeave(child) {
         log.debug "boseLeaveZone() No server, then...uhm, we probably were it!"
         // Dismantle the entire thing, first send this to master
         result['endpoint'] = "/removeZoneSlave"
-        result['host'] = child.getDeviceIP() + ":8090"
+        result['host'] = child.getDeviceIP() + ":" + bosePort
         result['body'] = "<zone master=\"${child.boseGetDeviceID()}\" senderIPAddress=\"${child.getDeviceIP()}\">"
         getChildDevices().each{ dev ->
             if (dev.boseGetZone() || dev.boseGetDeviceID() == child.boseGetDeviceID())
@@ -309,131 +348,13 @@ def boseZoneLeave(child) {
         getChildDevices().each{ dev ->
             if (dev.boseGetZone() && dev.boseGetDeviceID() != child.boseGetDeviceID()) {
                 log.trace "Additional device: " + dev
-                result['host'] = dev.getDeviceIP() + ":8090"
+                result['host'] = dev.getDeviceIP() + ":" + bosePort
                 results << result
             }
         }
     }
 
     return results
-}
-
-/**
- * Define our XML parsers
- *
- * @return mapping of root-node <-> parser function
- */
-def getParsers() {
-    [
-        "root" : "parseDESC",
-        "info" : "parseINFO"
-    ]
-}
-
-/**
- * Called when location has changed, contains information from
- * network transactions. See deviceDiscovery() for where it is
- * registered.
- *
- * @param evt Holds event information
- */
-def onLocation(evt) {
-    // Convert the event into something we can use
-    def lanEvent = parseLanMessage(evt.description, true)
-    lanEvent << ["hub":evt?.hubId]
-
-    // Determine what we need to do...
-    if (lanEvent?.ssdpTerm?.contains(getDeviceType()) &&
-        (getUSNQualifier() == null ||
-         lanEvent?.ssdpUSN?.contains(getUSNQualifier())
-        )
-       )
-    {
-        parseSSDP(lanEvent)
-    }
-    else if (
-        lanEvent.headers && lanEvent.body &&
-        lanEvent.headers."content-type"?.contains("xml")
-        )
-    {
-        def parsers = getParsers()
-        def xmlData = new XmlSlurper().parseText(lanEvent.body)
-
-        // Let each parser take a stab at it
-        parsers.each { node,func ->
-            if (xmlData.name() == node)
-                "$func"(xmlData)
-        }
-    }
-}
-
-/**
- * Handles SSDP description file.
- *
- * @param xmlData
- */
-private def parseDESC(xmlData) {
-    log.info "parseDESC()"
-
-    def devicetype = getDeviceType().toLowerCase()
-    def devicetxml = body.device.deviceType.text().toLowerCase()
-
-    // Make sure it's the type we want
-    if (devicetxml == devicetype) {
-        def devices = getDevices()
-        def device = devices.find {it?.key?.contains(xmlData?.device?.UDN?.text())}
-        if (device && !device.value?.verified) {
-            // Unlike regular DESC, we cannot trust this just yet, parseINFO() decides all
-            device.value << [name:xmlData?.device?.friendlyName?.text(),model:xmlData?.device?.modelName?.text(), serialNumber:xmlData?.device?.serialNum?.text()]
-        } else {
-            log.error "parseDESC(): The xml file returned a device that didn't exist"
-        }
-    }
-}
-
-/**
- * Handle BOSE <info></info> result. This is an alternative to
- * using the SSDP description standard. Some of the speakers do
- * not support SSDP description, so we need this as well.
- *
- * @param xmlData
- */
-private def parseINFO(xmlData) {
-    log.info "parseINFO()"
-    def devicetype = getDeviceType().toLowerCase()
-
-    def deviceID = xmlData.attributes()['deviceID']
-    def device = getDevices().find {it?.key?.contains(deviceID)}
-    if (device && !device.value?.verified) {
-        device.value << [name:xmlData?.name?.text(),model:xmlData?.type?.text(), serialNumber:xmlData?.serialNumber?.text(), "deviceID":deviceID, verified: true]
-    }
-}
-
-/**
- * Handles SSDP discovery messages and adds them to the list
- * of discovered devices. If it already exists, it will update
- * the port and location (in case it was moved).
- *
- * @param lanEvent
- */
-def parseSSDP(lanEvent) {
-    //SSDP DISCOVERY EVENTS
-    def USN = lanEvent.ssdpUSN.toString()
-    def devices = getDevices()
-
-    if (!(devices."${USN}")) {
-        //device does not exist
-        log.trace "parseSDDP() Adding Device \"${USN}\" to known list"
-        devices << ["${USN}":lanEvent]
-    } else {
-        // update the values
-        def d = devices."${USN}"
-        if (d.networkAddress != lanEvent.networkAddress || d.deviceAddress != lanEvent.deviceAddress) {
-            log.trace "parseSSDP() Updating device location (ip & port)"
-            d.networkAddress = lanEvent.networkAddress
-            d.deviceAddress = lanEvent.deviceAddress
-        }
-    }
 }
 
 /**
@@ -461,23 +382,6 @@ private refreshDevices() {
     discoverDevices()
     verifyDevices()
     runIn(300, "refreshDevices")
-}
-
-/**
- * Starts a subscription for network events
- *
- * @param force If true, will unsubscribe and subscribe if necessary (Optional, default false)
- */
-private subscribeNetworkEvents(force=false) {
-    if (force) {
-        unsubscribe()
-        state.subscribe = false
-    }
-
-    if(!state.subscribe) {
-        subscribe(location, null, onLocation, [filterEvents:false])
-        state.subscribe = true
-    }
 }
 
 /**
@@ -517,19 +421,32 @@ private verifyDevices() {
  * @param port The port to use (0 will be treated as invalid and will use 80)
  * @param devicessdpPath The URL path (for example, /desc)
  *
- * @note Result is captured in locationHandler()
+ * @note Result is captured in setupHandler()
  */
 private verifyDevice(String deviceNetworkId, String ip, int port, String devicessdpPath) {
     if(ip) {
-        def address = ip + ":8090"
+        def address = ip + ":" + bosePort
         sendHubCommand(new physicalgraph.device.HubAction([
             method: "GET",
             path: "/info",
             headers: [
                 HOST: address,
-            ]]))
+            ]], deviceNetworkId, [callback: "setupHandler"]))
     } else {
         log.warn("verifyDevice() IP address was empty")
+    }
+}
+
+void setupHandler(hubResponse) {
+    String contentType = hubResponse?.headers['Content-Type']
+    if (contentType != null && contentType == 'text/xml') {
+        def body = hubResponse.xml
+
+        def deviceID = body.attributes()['deviceID']
+        def device = getDevices().find {it?.key?.contains(deviceID)}
+        if (device && !device.value?.verified) {
+            device.value << [name:body?.name?.text(), model:body?.type?.text(), serialNumber:body?.serialNumber?.text(), "deviceID":deviceID, manufacturer: "Bose Corporation", verified: true]
+        }
     }
 }
 
@@ -572,36 +489,4 @@ private String convertHexToIP(hex) {
         [convertHexToInt(hex[0..1]),convertHexToInt(hex[2..3]),convertHexToInt(hex[4..5]),convertHexToInt(hex[6..7])].join(".")
     else
         hex
-}
-
-/**
- * Tests if this setup can support SmarthThing Labs items
- *
- * @return true if it supports it.
- */
-private Boolean canInstallLabs()
-{
-    return hasAllHubsOver("000.011.00603")
-}
-
-/**
- * Tests if the firmwares on all hubs owned by user match or exceed the
- * provided version number.
- *
- * @param desiredFirmware The version that must match or exceed
- * @return true if hub has same or newer
- */
-private Boolean hasAllHubsOver(String desiredFirmware)
-{
-    return realHubFirmwareVersions.every { fw -> fw >= desiredFirmware }
-}
-
-/**
- * Creates a list of firmware version for every hub the user has
- *
- * @return List of firmwares
- */
-private List getRealHubFirmwareVersions()
-{
-    return location.hubs*.firmwareVersionString.findAll { it }
 }

@@ -129,6 +129,8 @@ metadata {
         "aux", "everywhere"])           // Row 6 (122)
 }
 
+private getBosePort() { "8090" }
+
 /**************************************************************************
  * The following section simply maps the actions as defined in
  * the metadata into onAction() calls.
@@ -211,6 +213,14 @@ def parse(String event) {
     return actions.flatten()
 }
 
+void sync(ip, port) {
+    if (ip) {
+        updateDataValue("ip", ip)
+        updateDataValue("port", port)
+        sendEvent(name: "IP", value: ip, descriptionText: "IP is ${convertHexToIP(ip)}")
+    }
+}
+
 /**
  * Called when the devicetype is first installed.
  *
@@ -232,7 +242,7 @@ def onAction(String user, data=null) {
     log.info "onAction(${user})"
 
     // Keep IP address current (since device may have changed)
-    state.address = parent.resolveDNI2Address(device.deviceNetworkId)
+    state.address = deviceIP
 
     // Process action
     def actions = null
@@ -830,7 +840,7 @@ def boseGET(String path) {
         method: "GET",
         path: path,
         headers: [
-            HOST: state.address + ":8090",
+            HOST: state.address + ":" + bosePort,
         ]])
 }
 
@@ -850,7 +860,7 @@ def bosePOST(String path, String data, String address=null) {
         path: path,
         body: data,
         headers: [
-            HOST: address ?: (state.address + ":8090"),
+            HOST: address ?: (state.address + ":" + bosePort),
         ]])
 }
 
@@ -985,5 +995,23 @@ def boseGetDeviceID() {
  * @return IP address
  */
 def getDeviceIP() {
-    return parent.resolveDNI2Address(device.deviceNetworkId)
+    def ip = getDataValue("ip")
+    if (ip) {
+        return convertHexToIP(ip)
+    }
+    else {
+        log.warn "BOSE Child calling parent for IP."
+        return parent.resolveDNI2Address(device.deviceNetworkId)
+    }
+}
+
+private Integer convertHexToInt(hex) {
+    Integer.parseInt(hex,16)
+}
+
+private String convertHexToIP(hex) {
+    if (hex)
+        [convertHexToInt(hex[0..1]),convertHexToInt(hex[2..3]),convertHexToInt(hex[4..5]),convertHexToInt(hex[6..7])].join(".")
+    else
+        hex
 }
