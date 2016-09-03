@@ -409,7 +409,7 @@ def initialize() {
 
 void calculateAccuracy() {
 	def timeDiff = (Calendar.getInstance().getTimeInMillis() - state.installedTime)/(1000 * 60)
-	def numberOfExpectedCheckIn = Math.floor(timeDiff/5)      //diving by 1 to make code generic. divide by check in time in minutes
+	def numberOfExpectedCheckIn = Math.floor(timeDiff/5)      //diving by 5 to make code generic. divide by check in time in minutes
 	log.trace "numberOfExpectedCheckIn : $numberOfExpectedCheckIn"
 	def accuracy = 0
 	if (numberOfExpectedCheckIn > 0) {
