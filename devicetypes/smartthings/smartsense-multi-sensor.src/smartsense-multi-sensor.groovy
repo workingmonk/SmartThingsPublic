@@ -128,6 +128,7 @@ metadata {
 
 		main(["status", "acceleration", "temperature"])
 		details(["status", "checkInCounter", "checkInAccuracy", "reset", "calculateAccuracy", "acceleration", "temperature", "battery", "refresh"])
+		//details(["status", "checkInCounter", "checkInAccuracy", "calculateAccuracy", "acceleration", "temperature", "battery", "refresh"])
 	}
  }
 

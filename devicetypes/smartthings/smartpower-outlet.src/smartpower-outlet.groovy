@@ -83,12 +83,13 @@ metadata {
 		standardTile("reset", "device.reset", inactiveLabel: false, decoration: "flat", width: 2, height: 2) {
 			state "default", action:"reset", label:'Counter Reset', unit:""
 		}
-		standardTile("calculateAccuracy", "device.calculateAccuracy", inactiveLabel: false, decoration: "flat", width: 2, height: 2) {
+		standardTile("calculateAccuracy", "device.calculateAccuracy", inactiveLabel: false, decoration: "flat", width: 4, height: 2) {
 			state "default", action:"calculateAccuracy", label:'Calculate Accuracy', unit:""
 		}
 
 		main "switch"
 		details(["switch", "checkInCounter", "checkInAccuracy", "reset", "calculateAccuracy", "refresh"])
+		//details(["switch", "checkInCounter", "checkInAccuracy", "calculateAccuracy", "refresh"])
 	}
 }
 

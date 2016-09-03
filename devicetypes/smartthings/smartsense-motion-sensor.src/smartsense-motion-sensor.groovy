@@ -101,6 +101,7 @@ metadata {
 
 		main(["motion", "temperature"])
 		details(["motion", "checkInCounter", "checkInAccuracy", "reset", "calculateAccuracy", "temperature", "battery", "refresh"])
+		//details(["motion", "checkInCounter", "checkInAccuracy", "calculateAccuracy", "temperature", "battery", "refresh"])
 	}
 }
 

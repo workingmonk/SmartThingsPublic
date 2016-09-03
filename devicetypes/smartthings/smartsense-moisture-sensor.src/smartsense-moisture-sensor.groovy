@@ -97,6 +97,7 @@ metadata {
 
 		main (["water", "temperature"])
 		details(["water", "checkInCounter", "checkInAccuracy", "reset", "calculateAccuracy", "temperature", "battery", "refresh"])
+		//details(["water", "checkInCounter", "checkInAccuracy", "calculateAccuracy", "temperature", "battery", "refresh"])
 	}
 }
 
