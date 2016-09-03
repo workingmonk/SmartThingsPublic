@@ -19,8 +19,11 @@ metadata {
         capability "Refresh"
         capability "Switch"
         capability "Switch Level"
-        capability "Health Check"
 
+        attribute "checkInCounter", "number"
+        attribute "checkInAccuracy", "number"
+        command "calculateAccuracy"
+        command "reset"
 
         fingerprint profileId: "0104", inClusters: "0000, 0003, 0004, 0005, 0006, 0008"
         fingerprint profileId: "0104", inClusters: "0000, 0003, 0004, 0005, 0006, 0008, 0B04, FC0F", outClusters: "0019", manufacturer: "OSRAM", model: "LIGHTIFY A19 ON/OFF/DIM", deviceJoinName: "OSRAM LIGHTIFY LED Smart Connected Light"
@@ -43,14 +46,32 @@ metadata {
         standardTile("refresh", "device.refresh", inactiveLabel: false, decoration: "flat", width: 2, height: 2) {
             state "default", label:"", action:"refresh.refresh", icon:"st.secondary.refresh"
         }
+
+        valueTile("checkInCounter", "device.checkInCounter", decoration: "flat", inactiveLabel: false, width: 2, height: 2) {
+            state "checkInCounter", label:'${currentValue} checkIns', unit:""
+        }
+        valueTile("checkInAccuracy", "device.checkInAccuracy", decoration: "flat", inactiveLabel: false, width: 4, height: 2) {
+            state "checkInAccuracy", label:'${currentValue} % checkIns', unit:""
+        }
+        standardTile("reset", "device.reset", inactiveLabel: false, decoration: "flat", width: 2, height: 2) {
+            state "default", action:"reset", label:'Counter Reset', unit:""
+        }
+        standardTile("calculateAccuracy", "device.calculateAccuracy", inactiveLabel: false, decoration: "flat", width: 2, height: 2) {
+            state "default", action:"calculateAccuracy", label:'Calculate Accuracy', unit:""
+        }
+
         main "switch"
-        details(["switch", "refresh"])
+        details(["switch", "checkInCounter", "checkInAccuracy", "reset", "calculateAccuracy", "refresh"])
     }
 }
 
 // Parse incoming device messages to generate events
 def parse(String description) {
     log.debug "description is $description"
+
+    if(description?.startsWith("on/off:")) {
+        incrementCheckInCounter()
+    }
 
     def event = zigbee.getEvent(description)
     if (event) {
@@ -104,6 +125,47 @@ def refresh() {
 def configure() {
     log.debug "Configuring Reporting and Bindings."
     // Enrolls device to Device-Watch with 3 x Reporting interval 30min
-    sendEvent(name: "checkInterval", value: 1800, displayed: false, data: [protocol: "zigbee"])
-    zigbee.onOffConfig() + zigbee.levelConfig() + zigbee.onOffRefresh() + zigbee.levelRefresh()
+    //sendEvent(name: "checkInterval", value: 1800, displayed: false, data: [protocol: "zigbee"])
+    return zigbee.onOffConfig(0, 60) + zigbee.levelConfig() + zigbee.onOffRefresh() + zigbee.levelRefresh()
+}
+
+def installed() {
+    initialize()
+}
+
+void reset() {
+    initialize()
+}
+
+def initialize() {
+    state.checkInCounter = 0
+    state.installedTime = Calendar.getInstance().getTimeInMillis()
+    sendEvent(name: "checkInCounter", value: 0, displayed: false)
+    sendEvent(name: "checkInAccuracy", value: 0, displayed: false)
+}
+
+void calculateAccuracy() {
+    def timeDiff = (Calendar.getInstance().getTimeInMillis() - state.installedTime)/(1000 * 60)
+    def numberOfExpectedCheckIn = Math.floor(timeDiff/1)      //diving by 1 to make code generic. divide by check in time in minutes
+    log.trace "numberOfExpectedCheckIn : $numberOfExpectedCheckIn"
+    def accuracy = 0
+    if (numberOfExpectedCheckIn > 0) {
+        if(state.checkInCounter > numberOfExpectedCheckIn) {
+            state.checkInCounter = numberOfExpectedCheckIn    		// this case will happen after reset has been set
+        }
+        accuracy = (state.checkInCounter * 100) / numberOfExpectedCheckIn
+    }
+    log.trace "accuracy: $accuracy"
+    sendEvent(name: "checkInAccuracy", value: accuracy, displayed: false)
+}
+
+void incrementCheckInCounter() {
+    log.trace "in checkIn counter"
+    state.checkInCounter = state.checkInCounter + 1
+    sendEvent(name: "checkInCounter", value: state.checkInCounter, displayed: false)
+    calculateAccuracy()
+}
+
+private getEndpointId() {
+    new BigInteger(device.endpointId, 16).toString()
 }
