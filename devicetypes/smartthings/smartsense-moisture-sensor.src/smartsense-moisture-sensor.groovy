@@ -91,12 +91,12 @@ metadata {
 		standardTile("reset", "device.reset", inactiveLabel: false, decoration: "flat", width: 2, height: 2) {
 			state "default", action:"reset", label:'Counter Reset', unit:""
 		}
-		standardTile("calculateAccuracy", "device.calculateAccuracy", inactiveLabel: false, decoration: "flat", width: 2, height: 2) {
+		standardTile("calculateAccuracy", "device.calculateAccuracy", inactiveLabel: false, decoration: "flat", width: 4, height: 2) {
 			state "default", action:"calculateAccuracy", label:'Calculate Accuracy', unit:""
 		}
 
 		main (["water", "temperature"])
-		details(["water", "temperature", "battery", "refresh", "checkInCounter", "checkInAccuracy", "reset", "calculateAccuracy"])
+		details(["water", "checkInCounter", "checkInAccuracy", "reset", "calculateAccuracy", "temperature", "battery", "refresh"])
 	}
 }
 
@@ -179,6 +179,7 @@ private Map parseReportAttributeMessage(String description) {
 		resultMap = getTemperatureResult(value)
 	}
 	else if (descMap.cluster == "0001" && descMap.attrId == "0020") {
+		incrementCheckInCounter()
 		resultMap = getBatteryResult(Integer.parseInt(descMap.value, 16))
 	}
 
