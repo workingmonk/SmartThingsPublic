@@ -23,11 +23,13 @@ metadata {
 		capability "Refresh"
 		capability "Temperature Measurement"
 		capability "Water Sensor"
-		capability "Health Check"
 		capability "Sensor"
 
+		attribute "checkInCounter", "number"
+		attribute "checkInAccuracy", "number"
+		command "calculateAccuracy"
+		command "reset"
 		command "enrollResponse"
-
 
 		fingerprint inClusters: "0000,0001,0003,0402,0500,0020,0B05", outClusters: "0019", manufacturer: "CentraLite",  model: "3315-S", deviceJoinName: "Water Leak Sensor"
 		fingerprint inClusters: "0000,0001,0003,0402,0500,0020,0B05", outClusters: "0019", manufacturer: "CentraLite",  model: "3315"
@@ -79,8 +81,22 @@ metadata {
 			state "default", action:"refresh.refresh", icon:"st.secondary.refresh"
 		}
 
+
+		valueTile("checkInCounter", "device.checkInCounter", decoration: "flat", inactiveLabel: false, width: 2, height: 2) {
+			state "checkInCounter", label:'${currentValue} checkIns', unit:""
+		}
+		valueTile("checkInAccuracy", "device.checkInAccuracy", decoration: "flat", inactiveLabel: false, width: 4, height: 2) {
+			state "checkInAccuracy", label:'${currentValue} % checkIns', unit:""
+		}
+		standardTile("reset", "device.reset", inactiveLabel: false, decoration: "flat", width: 2, height: 2) {
+			state "default", action:"reset", label:'Counter Reset', unit:""
+		}
+		standardTile("calculateAccuracy", "device.calculateAccuracy", inactiveLabel: false, decoration: "flat", width: 4, height: 2) {
+			state "default", action:"calculateAccuracy", label:'Calculate Accuracy', unit:""
+		}
+
 		main (["water", "temperature"])
-		details(["water", "temperature", "battery", "refresh"])
+		details(["water", "checkInCounter", "checkInAccuracy", "reset", "calculateAccuracy", "temperature", "battery", "refresh"])
 	}
 }
 
@@ -163,6 +179,7 @@ private Map parseReportAttributeMessage(String description) {
 		resultMap = getTemperatureResult(value)
 	}
 	else if (descMap.cluster == "0001" && descMap.attrId == "0020") {
+		incrementCheckInCounter()
 		resultMap = getBatteryResult(Integer.parseInt(descMap.value, 16))
 	}
 
@@ -305,7 +322,7 @@ def refresh() {
 }
 
 def configure() {
-	sendEvent(name: "checkInterval", value: 14400, displayed: false, data: [protocol: "zigbee"])
+	//sendEvent(name: "checkInterval", value: 14400, displayed: false, data: [protocol: "zigbee"])
 
 	String zigbeeEui = swapEndianHex(device.hub.zigbeeEui)
 	log.debug "Configuring Reporting, IAS CIE, and Bindings."
@@ -314,7 +331,7 @@ def configure() {
 		"send 0x${device.deviceNetworkId} 1 1", "delay 500",
 
 		"zdo bind 0x${device.deviceNetworkId} ${endpointId} 1 1 {${device.zigbeeId}} {}", "delay 500",
-		"zcl global send-me-a-report 1 0x20 0x20 30 21600 {01}",		//checkin time 6 hrs
+		"zcl global send-me-a-report 1 0x20 0x20 30 300 {01}",		//checkin time 5 minutes
 		"send 0x${device.deviceNetworkId} 1 1", "delay 500",
 
 		"zdo bind 0x${device.deviceNetworkId} ${endpointId} 1 0x402 {${device.zigbeeId}} {}", "delay 500",
@@ -361,4 +378,41 @@ private byte[] reverseArray(byte[] array) {
 		i++;
 	}
 	return array
+}
+
+def installed() {
+	initialize()
+}
+
+void reset() {
+	initialize()
+}
+
+def initialize() {
+	state.checkInCounter = 0
+	state.installedTime = Calendar.getInstance().getTimeInMillis()
+	sendEvent(name: "checkInCounter", value: 0, displayed: false)
+	sendEvent(name: "checkInAccuracy", value: 0, displayed: false)
+}
+
+void calculateAccuracy() {
+	def timeDiff = (Calendar.getInstance().getTimeInMillis() - state.installedTime)/(1000 * 60)
+	def numberOfExpectedCheckIn = Math.floor(timeDiff/5)      //diving by 5 to make code generic. divide by check in time in minutes
+	log.trace "numberOfExpectedCheckIn : $numberOfExpectedCheckIn"
+	def accuracy = 0
+	if (numberOfExpectedCheckIn > 0) {
+		if(state.checkInCounter > numberOfExpectedCheckIn) {
+			state.checkInCounter = numberOfExpectedCheckIn    		// this case will happen after reset has been set
+		}
+		accuracy = (state.checkInCounter * 100) / numberOfExpectedCheckIn
+	}
+	log.trace "accuracy: $accuracy"
+	sendEvent(name: "checkInAccuracy", value: accuracy, displayed: false)
+}
+
+void incrementCheckInCounter() {
+	log.trace "in checkIn counter"
+	state.checkInCounter = state.checkInCounter + 1
+	sendEvent(name: "checkInCounter", value: state.checkInCounter, displayed: false)
+	calculateAccuracy()
 }
