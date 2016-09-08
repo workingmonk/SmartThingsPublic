@@ -421,7 +421,7 @@ def configure() {
 	log.debug "Configuring Reporting"
 
 	def configCmds = enrollResponse() +
-			zigbee.configureReporting(0x0001, 0x0020, 0x20, 10, 60, 01) +
+			zigbee.configureReporting(0x0001, 0x0020, 0x20, 10, 80, 01) +
 			zigbee.temperatureConfig() +
 			zigbee.configureReporting(0xFC02, 0x0010, 0x18, 10, 3600, 0x01, [mfgCode: manufacturerCode]) +
 			zigbee.configureReporting(0xFC02, 0x0012, 0x29, 1, 3600, 0x0001, [mfgCode: manufacturerCode]) +

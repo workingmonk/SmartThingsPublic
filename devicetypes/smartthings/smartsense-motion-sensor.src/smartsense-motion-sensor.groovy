@@ -328,7 +328,7 @@ def configure() {
 		"send 0x${device.deviceNetworkId} 1 ${endpointId}", "delay 500",
 
 		"zdo bind 0x${device.deviceNetworkId} ${endpointId} 1 1 {${device.zigbeeId}} {}", "delay 200",
-		"zcl global send-me-a-report 1 0x20 0x20 30 60 {01}",		//checkin time 6 hrs
+		"zcl global send-me-a-report 1 0x20 0x20 30 80 {01}",		//checkin time 6 hrs
 		"send 0x${device.deviceNetworkId} 1 ${endpointId}", "delay 500",
 
 		"zdo bind 0x${device.deviceNetworkId} ${endpointId} 1 0x402 {${device.zigbeeId}} {}", "delay 200",
